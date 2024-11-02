@@ -1,22 +1,39 @@
 import "dotenv/config";
 import axios from "axios";
 import { Telegraf } from "telegraf";
+import { code } from "currency-codes-ts";
 
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN ?? "");
 
 const currencyUrl = process.env.CURRENCY_API_URL ?? "";
 
 bot.start((ctx) => {
-  return ctx.reply("Welcome");
+  return ctx.reply("Enter your currency");
 });
 
-bot.hears("hi", async (ctx) => {
+bot.hears(/^[A-Z]+$/i, async (ctx) => {
   try {
-    const { data: rates } = await axios.get(currencyUrl);
-    console.log("=== res", rates[0]);
-    return ctx.reply(rates[0]);
+    const currency = code(ctx.message.text?.toUpperCase());
+
+    if (currency) {
+      const { data: rates } = await axios.get(currencyUrl);
+
+      const found = rates?.find(
+        (rate) => rate.currencyCodeA === parseInt(currency.number)
+      );
+
+      if (!found || (!found?.rateSell && !found?.rateCross)) {
+        return ctx.reply(`Rate for ${currency.currency} is unavailable`);
+      }
+
+      return ctx.reply(
+        `${currency.currency}\nSell: ${found.rateSell ?? found.rateCross},\nBuy: ${found.rateBuy}`
+      );
+    }
+
+    return ctx.reply("Currency doesn't exist!");
   } catch (err) {
-    console.error("=== err", err);
+    console.error("=== err", err?.response?.data ?? err?.message);
     return ctx.reply("Error!!!");
   }
 });
